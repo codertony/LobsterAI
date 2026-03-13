@@ -26,6 +26,16 @@ import {
   readAllowFromStore,
 } from './im/imPairingStore';
 import { OpenClawConfigSync } from './libs/openclawConfigSync';
+import {
+  resolveMemoryFilePath,
+  readMemoryEntries,
+  addMemoryEntry,
+  updateMemoryEntry,
+  deleteMemoryEntry,
+  searchMemoryEntries,
+  migrateSqliteToMemoryMd,
+  syncMemoryFileOnWorkspaceChange,
+} from './libs/openclawMemoryFile';
 import { OpenClawChannelSessionSync } from './libs/openclawChannelSessionSync';
 import { IMGatewayManager, IMPlatform, IMGatewayConfig } from './im';
 import { APP_NAME } from './appConstants';
@@ -1911,13 +1921,23 @@ if (!gotTheLock) {
     offset?: number;
   }) => {
     try {
-      const entries = getCoworkStore().listUserMemories({
-        query: input?.query?.trim() || undefined,
-        status: input?.status || 'all',
-        includeDeleted: Boolean(input?.includeDeleted),
-        limit: input?.limit,
-        offset: input?.offset,
+      const config = getCoworkStore().getConfig();
+      const filePath = resolveMemoryFilePath(config.workingDirectory);
+
+      // Lazy migration: SQLite → MEMORY.md (one-time)
+      migrateSqliteToMemoryMd(filePath, {
+        isMigrationDone: () => getStore().get<string>('openclawMemory.migration.v1.completed') === '1',
+        markMigrationDone: () => getStore().set('openclawMemory.migration.v1.completed', '1'),
+        getActiveMemoryTexts: () => {
+          return getCoworkStore().listUserMemories({ status: 'all', includeDeleted: false, limit: 200 })
+            .map((m) => m.text);
+        },
       });
+
+      const query = input?.query?.trim() || '';
+      const entries = query
+        ? searchMemoryEntries(filePath, query)
+        : readMemoryEntries(filePath);
       return { success: true, entries };
     } catch (error) {
       return {
@@ -1932,11 +1952,9 @@ if (!gotTheLock) {
     isExplicit?: boolean;
   }) => {
     try {
-      const entry = getCoworkStore().createUserMemory({
-        text: input.text,
-        confidence: input.confidence,
-        isExplicit: input?.isExplicit,
-      });
+      const config = getCoworkStore().getConfig();
+      const filePath = resolveMemoryFilePath(config.workingDirectory);
+      const entry = addMemoryEntry(filePath, input.text);
       return { success: true, entry };
     } catch (error) {
       return {
@@ -1953,13 +1971,12 @@ if (!gotTheLock) {
     isExplicit?: boolean;
   }) => {
     try {
-      const entry = getCoworkStore().updateUserMemory({
-        id: input.id,
-        text: input.text,
-        confidence: input.confidence,
-        status: input.status,
-        isExplicit: input.isExplicit,
-      });
+      const config = getCoworkStore().getConfig();
+      const filePath = resolveMemoryFilePath(config.workingDirectory);
+      if (!input.text) {
+        return { success: false, error: 'Memory text is required' };
+      }
+      const entry = updateMemoryEntry(filePath, input.id, input.text);
       if (!entry) {
         return { success: false, error: 'Memory entry not found' };
       }
@@ -1975,7 +1992,9 @@ if (!gotTheLock) {
     id: string;
   }) => {
     try {
-      const success = getCoworkStore().deleteUserMemory(input.id);
+      const config = getCoworkStore().getConfig();
+      const filePath = resolveMemoryFilePath(config.workingDirectory);
+      const success = deleteMemoryEntry(filePath, input.id);
       return success
         ? { success: true }
         : { success: false, error: 'Memory entry not found' };
@@ -1988,8 +2007,20 @@ if (!gotTheLock) {
   });
   ipcMain.handle('cowork:memory:getStats', async () => {
     try {
-      const stats = getCoworkStore().getUserMemoryStats();
-      return { success: true, stats };
+      const config = getCoworkStore().getConfig();
+      const filePath = resolveMemoryFilePath(config.workingDirectory);
+      const entries = readMemoryEntries(filePath);
+      return {
+        success: true,
+        stats: {
+          total: entries.length,
+          created: entries.length,
+          stale: 0,
+          deleted: 0,
+          explicit: entries.length,
+          implicit: 0,
+        },
+      };
     } catch (error) {
       return {
         success: false,
@@ -2053,6 +2084,8 @@ if (!gotTheLock) {
       getCoworkStore().setConfig(normalizedConfig);
       if (normalizedConfig.workingDirectory !== undefined && normalizedConfig.workingDirectory !== previousWorkingDir) {
         getSkillManager().handleWorkingDirectoryChange();
+        // Sync MEMORY.md to new workspace directory
+        syncMemoryFileOnWorkspaceChange(previousWorkingDir, normalizedConfig.workingDirectory);
       }
 
       const nextConfig = getCoworkStore().getConfig();
