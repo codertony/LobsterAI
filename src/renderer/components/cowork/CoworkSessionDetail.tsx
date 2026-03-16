@@ -1788,20 +1788,6 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
     );
   }, [turns]);
 
-  const messages = currentSession?.messages;
-  const displayItems = useMemo(() => messages ? buildDisplayItems(messages) : [], [messages]);
-  const turns = useMemo(() => buildConversationTurns(displayItems), [displayItems]);
-
-  // Cache turn DOM elements when turns change
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) { turnElsCacheRef.current = []; return; }
-    // DOM is already committed when useEffect runs, query synchronously
-    turnElsCacheRef.current = Array.from(
-      container.querySelectorAll<HTMLElement>('[data-turn-index]')
-    );
-  }, [turns]);
-
   // Auto scroll to bottom when new messages arrive or content updates (streaming)
   useEffect(() => {
     if (!shouldAutoScroll) {
