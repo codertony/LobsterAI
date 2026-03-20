@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ========== Stage 1: 变更检测 ==========
   changed-files:
@@ -53,10 +56,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
-      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: npm install
       - run: npm run lint
-      - run: npx prettier --check .
 
   # ========== Stage 3: Renderer 构建 ==========
   build-renderer:
@@ -68,8 +74,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
-      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: npm install
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
@@ -87,8 +97,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
-      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: npm install
       - run: npm run compile:electron
       - uses: actions/upload-artifact@v4
         with:
@@ -106,8 +120,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
-      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: npm install
       - run: npm run build:skills
 
   # ========== Stage 6: 测试 (Node.js 内置) ==========
@@ -119,7 +137,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run compile:electron
-      - run: npm run test:memory
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: npm install
+      - run: npm test

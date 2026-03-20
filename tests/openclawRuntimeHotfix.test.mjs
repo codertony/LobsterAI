@@ -255,7 +255,7 @@ test('applyBundledOpenClawRuntimeHotfixes patches matching runtime dist files', 
   assert.match(fs.readFileSync(controlFile, 'utf8'), /ownerOnly: true/);
 });
 
-test('bundled OpenClaw runtime exposes cron to non-owner native sessions', () => {
+test('bundled OpenClaw runtime exposes cron to non-owner native sessions', { skip: !fs.existsSync(path.resolve('vendor/openclaw-runtime/mac-arm64/dist')) }, () => {
   const runtimeDist = path.resolve('vendor/openclaw-runtime/mac-arm64/dist');
   const cronOwnerOffendingFiles = [];
   const cronFallbackOffendingFiles = [];

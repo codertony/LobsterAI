@@ -10,6 +10,9 @@ on:
       - 'package.json'
       - 'vite.config.ts'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ========== 验证可启动性 (Linux) ==========
   verify-linux:
@@ -19,7 +22,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
       
       # 安装 Electron 依赖 (Linux 需要)
       - name: Install Electron Dependencies
@@ -27,7 +34,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libuuid1 libsecret-1-0
       
-      - run: npm ci
+      - run: npm install
       - run: npm run build
       - run: npm run compile:electron
       
@@ -72,14 +79,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-          cache: 'npm'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: npm-${{ runner.os }}-
       
       - name: Install Electron Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libuuid1 libsecret-1-0
       
-      - run: npm ci
+      - run: npm install
       - run: npm run build
       - run: npm run compile:electron
       
